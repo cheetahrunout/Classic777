@@ -29,11 +29,19 @@ const BACK_C3 = BACK_C1 + 1;
 const BACK_SLOPE = 3 * BACK_C3 - 2 * BACK_C1; // f'(0), to match spin speed going into the stop
 const STOP_DIST = 4 * CELL;
 const MIN_SPIN_MS = 1050;
+const WINDUP_MS = 160;
+const ACCEL_MS = 260;
 
 const easeOutBack = (t: number) => 1 + BACK_C3 * Math.pow(t - 1, 3) + BACK_C1 * Math.pow(t - 1, 2);
 const mod = (a: number, n: number) => ((a % n) + n) % n;
 
-type ReelState = 'idle' | 'wait' | 'windup' | 'accel' | 'spin' | 'stop';
+/** Timing of one reel's spin, so its position is a pure function of the clock. */
+interface Plan {
+  t0: number;        // when this reel starts its windup
+  base: number;      // position before the spin
+  tS: number;        // when the stop begins (Infinity until the server has answered)
+  pS: number;        // position where the stop begins
+}
 
 interface Reel {
   el: HTMLElement;
@@ -42,15 +50,9 @@ interface Reel {
   n: number;
   span: number;
   p: number;
-  base: number;
-  v: number;
-  state: ReelState;
-  t0: number;
-  stopAt: number;
   target: number;
-  tween: { from: number; d: number; T: number; start: number } | null;
+  plan: Plan | null;
   lastTick: number;
-  thunked: boolean;
 }
 
 export function bulbPositions(): { x: number; y: number }[] {
@@ -80,95 +82,62 @@ export function createMachine(els: MachineEls, hooks: MachineHooks) {
     const n = symbols.length;
     const start = Math.floor(jitter() * n);
     return {
-      el, strip, symbols, n, span: n * CELL, p: start * CELL, base: 0, v: 0, state: 'idle', t0: 0,
-      stopAt: Infinity, target: start, tween: null, lastTick: start, thunked: false,
+      el, strip, symbols, n, span: n * CELL, p: start * CELL, target: start, plan: null, lastTick: start,
     };
   });
 
-  let landed: (() => void) | null = null;
   let spinStarted = 0;
+  let timers: number[] = [];
 
-  function drawReel(r: Reel) {
+  // Distance travelled (downward) tau ms after the windup ends: ramp up, then full speed.
+  const travel = (tau: number) => tau < ACCEL_MS ? SPEED * tau * tau / (2 * ACCEL_MS) : SPEED * (tau - ACCEL_MS / 2);
+  const STOP_MS = BACK_SLOPE * STOP_DIST / SPEED;
+
+  // Reel position as a pure function of time, so a slow or throttled frame rate
+  // can never leave the reels hanging: they are always where the clock says.
+  function reelPos(r: Reel, now: number): { p: number; phase: 'idle' | 'wait' | 'windup' | 'spin' | 'stop'; t?: number } {
+    const pl = r.plan;
+    if (!pl) return { p: r.p, phase: 'idle' };
+    const tau = now - pl.t0 - WINDUP_MS;
+    if (tau < -WINDUP_MS) return { p: pl.base, phase: 'wait' };
+    if (tau < 0) {
+      // A little kick upward before the reel lets go.
+      return { p: pl.base + 0.28 * CELL * Math.sin(Math.PI * (tau + WINDUP_MS) / WINDUP_MS), phase: 'windup' };
+    }
+    if (now < pl.tS) return { p: pl.base - travel(tau), phase: tau < ACCEL_MS * 0.6 ? 'windup' : 'spin' };
+    const t = Math.min(1, (now - pl.tS) / STOP_MS);
+    return { p: pl.pS - STOP_DIST * easeOutBack(t), phase: t >= 1 ? 'idle' : 'stop', t };
+  }
+
+  function drawReel(r: Reel, now: number) {
+    const pos = reelPos(r, now);
+    r.p = mod(pos.p, r.span);
     const y = WINDOW / 2 - CELL / 2 - (r.p + r.span);
     r.strip.style.transform = `translate3d(0, ${y.toFixed(2)}px, 0)`;
+    r.strip.classList.toggle('blur', pos.phase === 'spin' || (pos.phase === 'stop' && (pos.t ?? 1) < 0.35));
     const idx = Math.floor((r.p + CELL / 2) / CELL);
     if (idx !== r.lastTick) {
       r.lastTick = idx;
-      if (r.state !== 'idle') Sound.tick(r.state === 'stop' ? 0.7 : 1);
+      if (pos.phase !== 'idle' && pos.phase !== 'wait') Sound.tick(pos.phase === 'stop' ? 0.7 : 1);
+    }
+    if (pos.phase === 'idle' && r.plan) {
+      r.p = r.target * CELL;
+      r.plan = null;
     }
   }
 
-  function updateReel(r: Reel, now: number, dt: number) {
-    switch (r.state) {
-      case 'windup': {
-        // A little kick upward before the reels let go.
-        const t = (now - r.t0) / 160;
-        if (t >= 1) {
-          r.p = r.base;
-          r.state = 'accel';
-          r.t0 = now;
-        } else {
-          r.p = r.base + 0.28 * CELL * Math.sin(Math.PI * t);
-        }
-        break;
-      }
-      case 'accel': {
-        r.v = Math.min(SPEED, SPEED * (now - r.t0) / 260);
-        r.p -= r.v * dt;
-        if (r.v >= SPEED) r.state = 'spin';
-        if (r.v > SPEED * 0.6) r.strip.classList.add('blur');
-        break;
-      }
-      case 'spin': {
-        r.p -= SPEED * dt;
-        if (now >= r.stopAt) {
-          const remaining = mod(r.p - r.target * CELL, r.span);
-          if (remaining <= STOP_DIST && remaining >= STOP_DIST - CELL * 1.5) {
-            r.state = 'stop';
-            r.tween = { from: r.p, d: remaining, T: BACK_SLOPE * remaining / SPEED, start: now };
-            r.thunked = false;
-            const next = reels[reels.indexOf(r) + 1];
-            if (next) next.stopAt = now + 360;
-          }
-        }
-        break;
-      }
-      case 'stop': {
-        const tw = r.tween!;
-        const t = Math.min(1, (now - tw.start) / tw.T);
-        r.p = tw.from - tw.d * easeOutBack(t);
-        if (t > 0.35) r.strip.classList.remove('blur');
-        if (!r.thunked && t >= 1 - BACK_C1 / BACK_C3) {
-          r.thunked = true;
-          Sound.reelStop();
-        }
-        if (t >= 1) {
-          r.p = r.target * CELL;
-          r.state = 'idle';
-          r.v = 0;
-          if (reels.every(x => x.state === 'idle')) {
-            Sound.humStop();
-            const done = landed;
-            landed = null;
-            done?.();
-          }
-        }
-        break;
-      }
-    }
-    r.p = mod(r.p, r.span);
-    drawReel(r);
+  function clearTimers() {
+    timers.forEach(clearTimeout);
+    timers = [];
   }
 
   function startReels() {
     spinStarted = performance.now();
+    clearTimers();
     for (const r of reels) r.el.classList.remove('win');
+    // Stagger the windup so the reels release one after another; they spin until land().
     reels.forEach((r, i) => {
-      r.base = r.p;
-      r.state = 'wait';
-      r.stopAt = Infinity;
-      // Stagger the windup so the reels release one after another.
-      setTimeout(() => { r.state = 'windup'; r.t0 = performance.now(); }, i * 70);
+      r.plan = { t0: spinStarted + i * 70, base: r.p, tS: Infinity, pS: 0 };
     });
     Sound.humStart();
   }
@@ -176,10 +145,30 @@ export function createMachine(els: MachineEls, hooks: MachineHooks) {
   /** Stop the reels on the server's stops; resolves when the last one has landed. */
   function land(stops: number[]): Promise<void> {
     return new Promise(resolve => {
-      landed = resolve;
-      reels.forEach((r, i) => { r.target = stops[i]; });
-      // Only the first reel gets a stop time; each stopping reel schedules the next.
-      reels[0].stopAt = Math.max(performance.now(), spinStarted + MIN_SPIN_MS);
+      // Plan every stop now. Each reel stops a beat after the one before it; the stop
+      // sounds and the result run on timers, so they arrive even if frames stall.
+      const now = performance.now();
+      let stopAt = Math.max(now, spinStarted + MIN_SPIN_MS);
+      reels.forEach((r, i) => {
+        r.target = stops[i];
+        const pl = r.plan ?? { t0: now - WINDUP_MS - ACCEL_MS, base: r.p, tS: Infinity, pS: 0 };
+        r.plan = pl;
+        const pAt = pl.base - travel(stopAt - pl.t0 - WINDUP_MS);
+        let remaining = mod(pAt - r.target * CELL, r.span);
+        if (remaining < STOP_DIST) remaining += r.span;
+        pl.tS = stopAt + (remaining - STOP_DIST) / SPEED;
+        pl.pS = r.target * CELL + STOP_DIST;
+        stopAt = pl.tS + 360;
+        timers.push(window.setTimeout(() => Sound.reelStop(), pl.tS + STOP_MS * (1 - BACK_C1 / BACK_C3) - now));
+        if (i === reels.length - 1) {
+          timers.push(window.setTimeout(() => {
+            const end = performance.now() + 1;
+            reels.forEach(x => drawReel(x, end));
+            Sound.humStop();
+            resolve();
+          }, pl.tS + STOP_MS - now));
+        }
+      });
     });
   }
 
@@ -317,14 +306,17 @@ export function createMachine(els: MachineEls, hooks: MachineHooks) {
         break;
       case 'spring': {
         // Damped spring back to upright, bouncing off the top stop.
-        const sec = Math.min(dt, 32) / 1000;
+        // Integrated in small steps over the real elapsed time.
         const K = 95, C = 11, STOP = -0.1;
-        lever.omega += (-K * lever.theta - C * lever.omega) * sec;
-        lever.theta += lever.omega * sec;
-        if (lever.theta < STOP) {
-          lever.theta = STOP;
-          if (lever.omega < -1.5) Sound.ratchet(0.35);
-          lever.omega = -lever.omega * 0.35;
+        for (let left = dt; left > 0; left -= 16) {
+          const sec = Math.min(16, left) / 1000;
+          lever.omega += (-K * lever.theta - C * lever.omega) * sec;
+          lever.theta += lever.omega * sec;
+          if (lever.theta < STOP) {
+            lever.theta = STOP;
+            if (lever.omega < -1.5) Sound.ratchet(0.35);
+            lever.omega = -lever.omega * 0.35;
+          }
         }
         if (Math.abs(lever.theta) < 0.002 && Math.abs(lever.omega) < 0.02) {
           lever.theta = 0;
@@ -352,11 +344,11 @@ export function createMachine(els: MachineEls, hooks: MachineHooks) {
     if (lever.mode !== 'rest' && lever.mode !== 'spring') return;
     if (!hooks.canPull()) return;
     e.preventDefault();
+    lever.grabOffset = svgPoint(e).y - ballY(lever.theta);
     lever.mode = 'drag';
     lever.latched = false;
     lever.omega = 0;
     lever.pointerId = e.pointerId;
-    lever.grabOffset = svgPoint(e).y - ballY(lever.theta);
     leverSvg.classList.add('dragging');
     grab.setPointerCapture(e.pointerId);
   });
@@ -383,6 +375,7 @@ export function createMachine(els: MachineEls, hooks: MachineHooks) {
   }
   grab.addEventListener('pointerup', endDrag);
   grab.addEventListener('pointercancel', endDrag);
+  grab.addEventListener('lostpointercapture', endDrag);
 
   // Keyboard on the handle itself
   leverSvg.addEventListener('keydown', e => {
@@ -419,11 +412,16 @@ export function createMachine(els: MachineEls, hooks: MachineHooks) {
   let last = performance.now();
   let raf = 0;
   function frame(now: number) {
-    const dt = Math.min(50, now - last);
-    last = now;
-    updateLever(now, dt);
-    for (const r of reels) updateReel(r, now, dt);
     raf = requestAnimationFrame(frame);
+    const dt = Math.min(1000, Math.max(0, now - last));
+    last = now;
+    try {
+      updateLever(now, dt);
+      for (const r of reels) drawReel(r, now);
+    } catch (err) {
+      // Never let one bad frame stop the loop.
+      console.error(err);
+    }
   }
 
   // The casino bar moves its panes by changing the --grove-bar-* variables on <html>: refit when it does.
@@ -434,7 +432,7 @@ export function createMachine(els: MachineEls, hooks: MachineHooks) {
   if (document.fonts?.ready) void document.fonts.ready.then(layout);
 
   layout();
-  reels.forEach(drawReel);
+  reels.forEach(r => drawReel(r, performance.now()));
   raf = requestAnimationFrame(frame);
 
   return {
@@ -445,6 +443,7 @@ export function createMachine(els: MachineEls, hooks: MachineHooks) {
     layout,
     destroy() {
       cancelAnimationFrame(raf);
+      clearTimers();
       barWatch.disconnect();
       resize.disconnect();
     },
