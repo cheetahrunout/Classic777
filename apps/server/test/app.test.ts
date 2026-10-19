@@ -32,8 +32,8 @@ async function seat(username?: string, prior?: string, tokensMicro?: number) {
   return { code: r.statusCode, body: r.json() };
 }
 
-async function spin(seatId: string, coins = 1, id: string = rng.id()) {
-  const r = await game.app.inject({ method: 'POST', url: '/api/spin', payload: { seat: seatId, coins, spin: id } });
+async function spin(seatId: string, coins = 1, id: string = rng.id(), multiplier?: number) {
+  const r = await game.app.inject({ method: 'POST', url: '/api/spin', payload: { seat: seatId, coins, multiplier, spin: id } });
   return { code: r.statusCode, body: r.json() };
 }
 
@@ -128,6 +128,27 @@ describe('a spin', () => {
     const bet = Math.floor(30 * 1e10 / 1_066_400);
     const win = Math.floor(body.winCents * 1e10 / 1_066_400);
     expect(body.player.tokensMicro).toBe(50_000_000 - bet + win);
+  });
+
+  it('stakes coins x multiplier and pays the multiplied table', async () => {
+    const s = (await seat()).body.seat;
+    const { code, body } = await spin(s, 3, rng.id(), 10);
+    expect(code).toBe(200);
+    expect(body).toMatchObject({ coins: 3, multiplier: 10, betCents: 300 });
+    expect(body.winCents).toBe(body.winCoins * 10);
+    expect(body.winCoins % 10).toBe(0);
+    const [round] = [...stub.rounds.values()];
+    expect(round).toMatchObject({ status: 'settled', bet_cents: 300, win_cents: body.winCents });
+  });
+
+  it('refuses a multiplied bet above the max bet', async () => {
+    const s = (await seat()).body.seat;
+    stub.control.limits.max_bet_cents = 150;
+    await setControl({});
+    // € 1,50 max: 1-3 coins at 1x and 5x, only 1 coin at 10x
+    await until(async () => (await game.app.inject(`/api/seat/${s}`)).json().view.betsAllowed.length === 7);
+    expect((await spin(s, 2, rng.id(), 10)).body.error).toBe('bet_not_allowed');
+    expect((await spin(s, 3, rng.id(), 5)).code).toBe(200);
   });
 
   it('answers a repeated pull once: one round, the same result', async () => {

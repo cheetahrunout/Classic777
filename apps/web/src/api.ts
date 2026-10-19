@@ -1,5 +1,5 @@
 // The page's only line out: our own server. Never the casino, never a key.
-import type { Coins, ErrorAnswer, PlayerView, SeatAnswer, SpinAnswer, View } from '@classic777/shared';
+import type { Coins, ErrorAnswer, Multiplier, PlayerView, SeatAnswer, SpinAnswer, View } from '@classic777/shared';
 
 export class ApiError extends Error {
   constructor(public status: number, public body: ErrorAnswer) {
@@ -20,7 +20,8 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Pr
 
 export const openSeat = (token: string, seat?: string) => call<SeatAnswer>('POST', '/api/seat', { token, seat });
 export const getSeat = (seat: string) => call<SeatAnswer>('GET', `/api/seat/${encodeURIComponent(seat)}`);
-export const spin = (seat: string, coins: Coins, id: string) => call<SpinAnswer>('POST', '/api/spin', { seat, coins, spin: id });
+export const spin = (seat: string, coins: Coins, multiplier: Multiplier, id: string) =>
+  call<SpinAnswer>('POST', '/api/spin', { seat, coins, multiplier, spin: id });
 
 /** Back through the casino for a fresh handoff token. */
 export function toLobby() {

@@ -18,6 +18,13 @@ export const STRIP_LENGTH = 22;
 export const MAX_COINS = 3;
 export type Coins = 1 | 2 | 3;
 
+/** The coin multiplier: every coin of the bet counts 1, 5 or 10 times. The most is 3 coins x 10 = 30 coins. */
+export const MULTIPLIERS = [1, 5, 10] as const;
+export type Multiplier = (typeof MULTIPLIERS)[number];
+
+/** A bet: 1 to 3 coins (the pay table column) times the multiplier. */
+export interface Bet { coins: Coins; multiplier: Multiplier }
+
 export type PayKey = 'SEVEN' | 'BAR3' | 'BAR2' | 'BAR1' | 'CHERRY3' | 'BELL' | 'ANYBAR' | 'CHERRY2' | 'CHERRY1';
 
 export interface PayRow {
@@ -65,15 +72,18 @@ export function lineAt(stops: readonly number[]): Sym[] {
   return stops.map((stop, i) => STRIPS[i][stop]);
 }
 
-/** Coins paid for a result at a bet of `coins` coins. */
-export function payFor(result: LineResult | null, coins: Coins): number {
+/** Coins paid for a result at a bet of `coins` coins, times the multiplier. */
+export function payFor(result: LineResult | null, coins: Coins, multiplier: Multiplier = 1): number {
   if (!result) return 0;
-  return PAY_BY_KEY.get(result.key)!.pays[coins - 1];
+  return PAY_BY_KEY.get(result.key)!.pays[coins - 1] * multiplier;
 }
 
-export function maxPay(coins: Coins): number {
-  return Math.max(...PAYTABLE.map(p => p.pays[coins - 1]));
+export function maxPay(coins: Coins, multiplier: Multiplier = 1): number {
+  return Math.max(...PAYTABLE.map(p => p.pays[coins - 1])) * multiplier;
 }
+
+/** Coins staked by a bet. */
+export const betCoins = (b: Bet) => b.coins * b.multiplier;
 
 /** Exact return to player for a bet of `coins`, by enumerating every stop combination. */
 export function exactRtp(coins: Coins): number {

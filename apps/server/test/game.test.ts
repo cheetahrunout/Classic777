@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { coinsAllowed, coinCentsFrom, pull } from '../src/game.ts';
+import { betsAllowed, coinsAllowed, coinCentsFrom, pull } from '../src/game.ts';
 import { simulate } from '../src/rtp-sim.ts';
 import { STRIP_LENGTH } from '@classic777/shared';
 
@@ -40,5 +40,21 @@ describe('bets and limits', () => {
     // 1,500 coins of € 1,00 is above a € 1.000,00 max win
     expect(coinsAllowed({ ...limits, max_win_cents: 100000 }, 100)).toEqual([1, 2]);
     expect(coinsAllowed(null, 10)).toEqual([]);
+  });
+
+  it('offers the multiplied bets that fit, up to 3 coins x 10', () => {
+    const pairs = (bets: { coins: number; multiplier: number }[]) => bets.map(b => `${b.coins}x${b.multiplier}`);
+    expect(pairs(betsAllowed(limits, 10))).toEqual(['1x1', '2x1', '3x1', '1x5', '2x5', '3x5', '1x10', '2x10', '3x10']);
+    // € 0,20 coins: 2 x 10 = € 4,00 is above the € 3,00 max bet
+    expect(pairs(betsAllowed(limits, 20))).toEqual(['1x1', '2x1', '3x1', '1x5', '2x5', '3x5', '1x10']);
+    // 1,500 x 10 coins of € 0,10 is the whole € 1.500,00 max win; one cent less and 3 x 10 is out
+    expect(pairs(betsAllowed({ ...limits, max_win_cents: 149999 }, 10))).not.toContain('3x10');
+  });
+
+  it('pays the pay table times the multiplier', () => {
+    const rng = { int: vi.fn().mockReturnValueOnce(18).mockReturnValueOnce(12).mockReturnValueOnce(14) };
+    const p = pull(rng, 3, 10);
+    expect(p.line).toEqual(['SEVEN', 'SEVEN', 'SEVEN']);
+    expect(p.winCoins).toBe(15000);
   });
 });

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { PAYTABLE, STRIPS, STRIP_LENGTH, evaluate, exactRtp, maxPay, payFor, type Coins } from '../src/index.ts';
+import { PAYTABLE, STRIPS, STRIP_LENGTH, betCoins, evaluate, exactRtp, maxPay, payFor, type Coins } from '../src/index.ts';
 
 const manifest = JSON.parse(readFileSync(new URL('../../../casino-game.json', import.meta.url), 'utf8'));
 
@@ -41,6 +41,14 @@ describe('evaluate', () => {
   it('pays the 3-coin jackpot bonus', () => {
     expect(payFor(evaluate(['SEVEN', 'SEVEN', 'SEVEN']), 3)).toBe(1500);
     expect(maxPay(3)).toBe(1500);
+  });
+
+  it('multiplies every pay by the coin multiplier', () => {
+    expect(payFor(evaluate(['SEVEN', 'SEVEN', 'SEVEN']), 3, 10)).toBe(15000);
+    expect(payFor(evaluate(['CHERRY', 'BLANK', 'BLANK']), 2, 5)).toBe(20);
+    expect(payFor(null, 3, 10)).toBe(0);
+    expect(maxPay(3, 10)).toBe(15000);
+    expect(betCoins({ coins: 3, multiplier: 10 })).toBe(30);
   });
 });
 

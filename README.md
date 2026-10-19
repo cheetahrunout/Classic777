@@ -18,8 +18,11 @@ Built to the casino's integration contract and build standard, revision 0.24.2
 
 ## Money and odds
 
-- Currency `euro`. A bet is 1 to 3 coins; the coin value is the admin's `coin_cents` setting (5, 10, 20, 50 or 100 cents, default 10).
-  The page offers only the bets that fit the casino's limits, including the 1,500-coin jackpot under the maximum win.
+- Currency `euro`. A bet is 1 to 3 coins (BET ONE loops 1, 2, 3) times a multiplier of 1x, 5x or 10x, so 1 to 30 coins;
+  every pay is the pay table's coin column times the multiplier, so the RTP is the same at every multiplier.
+  The coin value is the admin's `coin_cents` setting (5, 10, 20, 50 or 100 cents, default 10).
+  The page offers only the bets that fit the casino's limits, including the jackpot (1,500 coins x the multiplier) under the maximum win:
+  at € 0,10 a coin the declared limits allow every bet up to 30 coins (€ 3,00, top prize € 1.500,00).
 - The pay table is the original one with "any bar" raised from 10/20/30 to 12/24/33 coins.
   Exact RTP, by enumerating every stop combination: 96.12% at 1 and 2 coins, 96.31% at 3 coins. Declared `rtp_bps`: 9620.
 - `pnpm rtp` runs the 100,000-pull simulation of section 12. The jackpot makes a single run spread by about ±1.7 points (one sigma) around the exact figure.

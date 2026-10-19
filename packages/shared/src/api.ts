@@ -1,5 +1,5 @@
 // The contract between the page and the game server. The page sends intentions, the server answers state.
-import type { Coins, LineResult, Sym } from './game.ts';
+import type { Bet, Coins, LineResult, Multiplier, Sym } from './game.ts';
 
 export type GameStatus = 'open' | 'demo' | 'maintenance' | 'closed' | 'offline';
 
@@ -10,8 +10,10 @@ export interface View {
   demo: boolean;
   /** Euro cents per coin, the admin's `coin_cents` setting. */
   coinCents: number;
-  /** Bets (in coins) that fit the casino's current limits. */
+  /** Bets (in coins, at 1x) that fit the casino's current limits. */
   coinsAllowed: Coins[];
+  /** Every coins x multiplier bet that fits the casino's current limits. */
+  betsAllowed: Bet[];
   /** Micro-euro per token, for the euro value of a token balance. */
   rateMicro: number | null;
 }
@@ -33,8 +35,9 @@ export interface SpinAnswer {
   line: Sym[];
   result: LineResult | null;
   coins: Coins;
+  multiplier: Multiplier;
   betCents: number;
-  /** Coins won, as the pay table says. */
+  /** Coins won: the pay table times the multiplier. */
   winCoins: number;
   /** Euro cents the casino confirmed; 0 until it did. */
   winCents: number;

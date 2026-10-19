@@ -3,11 +3,11 @@ import Fastify, { type FastifyReply } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import {
   formatEuro, statusMessage,
-  type Coins, type ErrorAnswer, type GameStatus, type PlayerView, type SeatAnswer, type SpinAnswer, type View,
+  type Coins, type ErrorAnswer, type Multiplier, type GameStatus, type PlayerView, type SeatAnswer, type SpinAnswer, type View,
 } from '@classic777/shared';
 import { OpenSeatBody, SeatId, SpinBody } from '@classic777/shared/schemas';
 import { CasinoError, type Casino, type CasinoControl, type CasinoPlayer, type CasinoRound, type WatchState } from './casino/casino-game.js';
-import { coinCentsFrom, coinsAllowed, pull, type Rng } from './game.ts';
+import { betsAllowed, coinCentsFrom, coinsAllowed, pull, type Rng } from './game.ts';
 
 export interface AppOptions {
   casino: Casino;
@@ -103,6 +103,7 @@ export function buildApp(opts: AppOptions) {
       demo: status === 'demo' || (!!c?.demo && status !== 'closed'),
       coinCents,
       coinsAllowed: coinsAllowed(c?.limits ?? state.limits, coinCents),
+      betsAllowed: betsAllowed(c?.limits ?? state.limits, coinCents),
       rateMicro: c?.rate_micro ?? null,
     };
   }
@@ -240,21 +241,23 @@ export function buildApp(opts: AppOptions) {
     }
   }
 
-  async function runSpin(seat: Seat, coins: Coins): Promise<Answer> {
+  async function runSpin(seat: Seat, coins: Coins, multiplier: Multiplier): Promise<Answer> {
     if (stopping) return fail(503, 'restarting', 'The machine is restarting. Pull again in a moment.');
     const v = view();
     if (!playing(v)) return fail(409, 'not_open', statusMessage(v.status, v.reason));
-    if (!v.coinsAllowed.includes(coins)) return fail(400, 'bet_not_allowed', 'That bet is outside the casino limits.');
+    if (!v.betsAllowed.some(b => b.coins === coins && b.multiplier === multiplier)) {
+      return fail(400, 'bet_not_allowed', 'That bet is outside the casino limits.');
+    }
     if (seat.spinning) return fail(429, 'busy', 'The reels are still spinning.');
 
-    const betCents = coins * v.coinCents;
+    const betCents = coins * multiplier * v.coinCents;
     const round = rng.id();
     seat.spinning = true;
     inFlight++;
     try {
       try {
         const opened = await casino.openRound({
-          session: seat.session, round, hand: round, betCents, meta: { coins, coin_cents: v.coinCents },
+          session: seat.session, round, hand: round, betCents, meta: { coins, multiplier, coin_cents: v.coinCents },
         });
         if (opened.player) seat.player = opened.player;
       } catch (e) {
@@ -265,23 +268,24 @@ export function buildApp(opts: AppOptions) {
         return casinoFailure(e, seat);
       }
 
-      const p = pull(rng, coins);
+      const p = pull(rng, coins, multiplier);
       const settled = await settleWithRetry({
         round,
         winCents: p.winCoins * v.coinCents,
         outcome: p.result ? p.result.key : 'lose',
-        meta: { stops: p.stops, line: p.line, coins, win_coins: p.winCoins },
+        meta: { stops: p.stops, line: p.line, coins, multiplier, win_coins: p.winCoins },
       }, seat);
 
       if (settled.kind === 'ok' && settled.round.player) seat.player = settled.round.player;
       else await refreshPlayer(seat);
-      app.log.info({ event: 'spin', coins, bet_cents: betCents, outcome: p.result?.key ?? 'lose', settle: settled.kind });
+      app.log.info({ event: 'spin', coins, multiplier, bet_cents: betCents, outcome: p.result?.key ?? 'lose', settle: settled.kind });
 
       const body: SpinAnswer = {
         stops: p.stops,
         line: p.line,
         result: p.result,
         coins,
+        multiplier,
         betCents,
         winCoins: p.winCoins,
         winCents: settled.kind === 'ok' ? settled.round.win_cents : 0,
@@ -411,7 +415,7 @@ export function buildApp(opts: AppOptions) {
     // The same pull sent twice (a retry after a network hiccup) gets the same answer.
     let answer = seat.spins.get(body.data.spin);
     if (!answer) {
-      answer = runSpin(seat, body.data.coins);
+      answer = runSpin(seat, body.data.coins, body.data.multiplier);
       seat.spins.set(body.data.spin, answer);
       if (seat.spins.size > SPIN_MEMORY) seat.spins.delete(seat.spins.keys().next().value!);
     }

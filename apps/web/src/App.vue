@@ -3,7 +3,10 @@
 // tray.ts (PixiJS) drops the coins. The server decides every spin.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
-import { PAYTABLE, formatEuro, statusMessage, tokensValueCents, type Coins, type SeatAnswer, type SpinAnswer, type View } from '@classic777/shared';
+import {
+  MULTIPLIERS, PAYTABLE, formatEuro, statusMessage, tokensValueCents,
+  type Coins, type Multiplier, type SeatAnswer, type SpinAnswer, type View,
+} from '@classic777/shared';
 import { ApiError, getSeat, listen, openSeat, rememberSeat, spin, storedSeat, toLobby } from './api.ts';
 import { useGame } from './store.ts';
 import { svgFor } from './machine/art.ts';
@@ -13,7 +16,10 @@ import { createCoaster, type Coaster } from './machine/coaster.ts';
 import { Sound } from './machine/sound.ts';
 
 const game = useGame();
-const { view, coins, busy, message, alert, winCoins, hitKey, level, notice, playing, allowed, betCents, coinCents } = storeToRefs(game);
+const {
+  view, coins, multiplier, busy, message, alert, winCoins, hitKey, level, notice, playing, allowed, multipliersAllowed,
+  stakeCoins, betCents, coinCents, bets,
+} = storeToRefs(game);
 
 const stageEl = ref<HTMLElement>();
 const machineEl = ref<HTMLElement>();
@@ -145,11 +151,11 @@ function canPull(): boolean {
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 /** A lost answer is retried with the same pull id, which the server answers once. */
-async function spinOnce(seat: string, c: Coins): Promise<SpinAnswer> {
+async function spinOnce(seat: string, c: Coins, m: Multiplier): Promise<SpinAnswer> {
   const id = crypto.randomUUID();
   for (let attempt = 0; ; attempt++) {
     try {
-      return await spin(seat, c, id);
+      return await spin(seat, c, m, id);
     } catch (e) {
       if (e instanceof ApiError || attempt >= 3) throw e;
       await sleep(800 * (attempt + 1));
@@ -167,7 +173,7 @@ async function onLatch() {
 
   let answer: SpinAnswer;
   try {
-    answer = await spinOnce(game.seat!, coins.value);
+    answer = await spinOnce(game.seat!, coins.value, multiplier.value);
   } catch (e) {
     await machine!.landAnywhere();
     busy.value = false;
@@ -285,6 +291,7 @@ function pull() {
   machine?.pull();
 }
 
+/** BET ONE: 1, 2, 3 coins and round again (within the limits at this multiplier). */
 function betOne() {
   Sound.init();
   if (busy.value || !allowed.value.length) return;
@@ -293,10 +300,22 @@ function betOne() {
   Sound.coin();
 }
 
+/** The coin multiplier: 1x, 5x or 10x. */
+function setMultiplier(m: Multiplier) {
+  Sound.init();
+  if (busy.value || !multipliersAllowed.value.includes(m)) return;
+  multiplier.value = m;
+  game.fitBet();
+  Sound.coin();
+}
+
+/** MAX BET: the biggest stake the limits allow (3 coins x 10 = 30 coins), then pull. */
 function maxBet() {
   Sound.init();
-  if (busy.value || !allowed.value.length) return;
-  coins.value = allowed.value[allowed.value.length - 1];
+  if (busy.value || !bets.value.length) return;
+  const top = bets.value.reduce((a, b) => (b.coins * b.multiplier > a.coins * a.multiplier ? b : a));
+  multiplier.value = top.multiplier;
+  coins.value = top.coins;
   Sound.coin();
   pull();
 }
@@ -372,14 +391,14 @@ onBeforeUnmount(() => {
             <tr>
               <th scope="col">Pays</th>
               <th v-for="c in 3" :key="c" scope="col" :class="{ active: coins === c, off: !allowed.includes(c as Coins) }">
-                {{ coinLabel(c) }}
+                {{ coinLabel(c * multiplier) }}
               </th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="p in payRows" :key="p.key" :data-key="p.key" :class="{ 'jackpot-row': p.key === 'SEVEN', hit: hitKey === p.key }">
               <td><span class="icons" v-html="p.iconsHtml"></span><span v-if="p.label" class="row-label">{{ p.label }}</span></td>
-              <td v-for="(v, i) in p.pays" :key="i" :class="{ active: coins === i + 1, off: !allowed.includes((i + 1) as Coins) }">{{ v }}</td>
+              <td v-for="(v, i) in p.pays" :key="i" :class="{ active: coins === i + 1, off: !allowed.includes((i + 1) as Coins) }">{{ v * multiplier }}</td>
             </tr>
           </tbody>
         </table>
@@ -403,7 +422,7 @@ onBeforeUnmount(() => {
           <div class="led">
             <span class="led-label">Bet</span>
             <output class="led-digits" data-test="bet">{{ formatEuro(betCents) }}</output>
-            <span class="led-sub">{{ coinLabel(coins) }}</span>
+            <span class="led-sub">{{ coinLabel(stakeCoins) }}{{ multiplier > 1 ? ` · ${coins} × ${multiplier}` : '' }}</span>
           </div>
           <div class="led">
             <span class="led-label">Winner Paid</span>
@@ -412,6 +431,15 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="ticker" :class="{ alert }" aria-live="polite"><span data-test="message">{{ message }}</span></div>
+
+        <div class="multipliers" role="group" aria-label="Coin multiplier">
+          <span class="mult-label">Coins ×</span>
+          <button
+            v-for="m in MULTIPLIERS" :key="m" class="btn btn-mult" type="button" :aria-pressed="multiplier === m"
+            :disabled="busy || !playing || !multipliersAllowed.includes(m)" @click="setMultiplier(m)">
+            {{ m }}×
+          </button>
+        </div>
 
         <div class="controls">
           <button class="btn btn-chrome" type="button" :aria-pressed="soundOn" title="Sound on/off" @click="toggleSound">

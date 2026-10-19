@@ -105,3 +105,29 @@ test('the coaster on SPIN keeps the machine spinning until it is taken off', asy
   await page.waitForTimeout(2500);
   await expect(spin).toBeEnabled();
 });
+
+test('the multiplier, BET ONE looping 1-2-3 and MAX BET at 30 coins', async ({ page }) => {
+  await land(page, 'multiplier');
+  const bet = page.locator('[data-test=bet]');
+  const mult = m => page.locator('.btn-mult', { hasText: `${m}×` });
+  const betOne = page.locator('.btn-amber', { hasText: 'Bet' }).first();
+
+  await expect(bet).toHaveText('€ 0,10');
+  await mult(10).click();
+  await expect(mult(10)).toHaveAttribute('aria-pressed', 'true');
+  await expect(bet).toHaveText('€ 1,00');
+  await expect(page.locator('.paytable th').nth(1)).toHaveText('10 coins');
+
+  for (const want of ['€ 2,00', '€ 3,00', '€ 1,00']) {
+    await betOne.click();
+    await expect(bet).toHaveText(want);
+  }
+
+  await mult(1).click();
+  await expect(bet).toHaveText('€ 0,10');
+  await page.locator('.btn-amber', { hasText: 'Max' }).click();
+  await expect(bet).toHaveText('€ 3,00');
+  await expect(mult(10)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.btn-spin')).toBeDisabled();
+  await expect(page.locator('.btn-spin')).toBeEnabled({ timeout: 15_000 });
+});
