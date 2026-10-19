@@ -6,7 +6,7 @@ COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm run build || true
+RUN pnpm run build
 
 FROM node:24-alpine
 WORKDIR /app
