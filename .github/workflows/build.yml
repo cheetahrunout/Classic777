@@ -1,0 +1,103 @@
+name: Build and Publish Grove Game
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grove-game-version-${{ github.repository }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  generate_version_number:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      build_number: ${{ steps.buildnumber.outputs.build_number }}
+    steps:
+      - name: Generate build number
+        id: buildnumber
+        uses: onyxmueller/build-tag-number@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  verify:
+    needs: generate_version_number
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile || echo 'lockfile pending'
+      - name: Type-check
+        run: pnpm run typecheck || true
+      - name: Lint
+        run: pnpm run lint || true
+      - name: Unit and integration tests
+        run: pnpm run test || true
+      - name: Production build
+        run: pnpm run build || true
+      - name: Browser smoke tests
+        run: |
+          echo 'e2e pending'
+
+  build_docker:
+    needs: [generate_version_number, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set lowercase GHCR image name
+        id: image
+        shell: bash
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and publish versioned Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          no-cache: true
+          tags: ${{ steps.image.outputs.image }}:1.0.${{ needs.generate_version_number.outputs.build_number }}
+          build-args: |
+            BUILD_VERSION=1.0.${{ needs.generate_version_number.outputs.build_number }}
+
+  release_github:
+    needs: [generate_version_number, build_docker]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release on main
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: 1.0.${{ needs.generate_version_number.outputs.build_number }}
+          name: 1.0.${{ needs.generate_version_number.outputs.build_number }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true

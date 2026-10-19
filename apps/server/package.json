@@ -1,0 +1,11 @@
+{
+  "name": "@classic777/server",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "fastify": "^5.1.0"
+  }
+}
