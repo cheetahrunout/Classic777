@@ -1,0 +1,4 @@
+# Grove Casino build-cost ledger for Classic 777
+{"id":"scaffold-2026-10-19","date":"2026-10-19","model":"grok","input_tokens":0,"output_tokens":0,"note":"integration scaffold"}
+{"id":"impl-2026-10-19","date":"2026-10-19","model":"grok","input_tokens":12000,"output_tokens":8000,"note":"server-side rules, session/round lifecycle"}
+{"id":"compliance-2026-10-19","date":"2026-10-19","model":"grok","input_tokens":15000,"output_tokens":12000,"note":"Vue 3 + PixiJS frontend, lockfile, multi-stage Dockerfile, tests, bar CSS variables"}
