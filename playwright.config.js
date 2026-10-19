@@ -7,8 +7,6 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:8080',
     ...devices['Desktop Chrome'],
-    // CI installs the browser this Playwright expects; PW_CHROMIUM points elsewhere when needed.
-    launchOptions: process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {},
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
   webServer: [

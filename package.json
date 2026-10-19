@@ -15,7 +15,7 @@
     "rtp": "node --experimental-strip-types --no-warnings apps/server/src/rtp-sim.ts"
   },
   "devDependencies": {
-    "@playwright/test": "1.48.2",
+    "@playwright/test": "1.56.1",
     "eslint": "9.15.0",
     "eslint-plugin-vue": "9.33.0",
     "typescript": "5.9.3",
