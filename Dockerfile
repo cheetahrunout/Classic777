@@ -5,8 +5,11 @@ ENV NODE_ENV=production \
 COPY package.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/server/src apps/server/src
+COPY public public
 COPY casino-game.json ./
-RUN npm install --omit=dev --prefix apps/server || true
+WORKDIR /app/apps/server
+RUN npm install --omit=dev
+WORKDIR /app
 USER node
 ARG BUILD_VERSION=dev
 ENV GAME_VERSION=${BUILD_VERSION}

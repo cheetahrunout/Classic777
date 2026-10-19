@@ -1,5 +1,7 @@
 'use strict';
+const path = require('path');
 const Fastify = require('fastify');
+const fastifyStatic = require('@fastify/static');
 const { createCasino, rng, CasinoError } = require('./casino/casino-game');
 const { spin: doSpin, payoutFor } = require('./game-logic');
 
@@ -18,6 +20,11 @@ const stopWatch = casino.watch(state, () => ({
 }), () => {});
 
 const app = Fastify({ logger: true });
+
+app.register(fastifyStatic, {
+  root: path.join(__dirname, '../../../public'),
+  prefix: '/',
+});
 
 setInterval(() => {
   const now = Date.now();
@@ -119,66 +126,6 @@ app.post('/api/session/close', async (req) => {
     await casino.closeSession(s.casinoSession).catch(() => {});
   }
   return { ok: true };
-});
-
-app.get('/', async (req, reply) => {
-  const token = req.query.gc_token || '';
-  reply.type('text/html').send(`<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Classic 777</title>
-<script src="https://casino.grovestreet.zip/bar.js" data-game="classic777"></script>
-<style>
-  body { margin:0; background:#1a0a0a; color:#f0e6d2; font-family:system-ui,sans-serif; }
-  #game { padding: var(--grove-bar-top,56px) 16px 16px; max-width:640px; margin:0 auto; text-align:center; }
-  button { background:#8b0000; color:#fff; border:none; padding:14px 32px; font-size:20px; cursor:pointer; border-radius:4px; }
-  .reels { display:flex; gap:12px; justify-content:center; margin:20px 0; }
-  .reel { width:90px; height:120px; background:#111; border:3px solid #c9a227; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:bold; }
-</style>
-</head>
-<body>
-<div id="game">
-  <h1>Classic 777</h1>
-  <p>Status: <span id="status">...</span></p>
-  <div class="reels">
-    <div class="reel" id="r0">—</div>
-    <div class="reel" id="r1">—</div>
-    <div class="reel" id="r2">—</div>
-  </div>
-  <button id="spin">SPIN</button>
-  <p id="msg"></p>
-</div>
-<script>
-let seat = null;
-const token = ${JSON.stringify(token)};
-async function init() {
-  if (token) {
-    try {
-      const r = await fetch('/api/session/open', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({token}) });
-      const d = await r.json();
-      if (d.seat) seat = d.seat;
-    } catch (e) {}
-  }
-  const st = await fetch('/api/state?seat=' + encodeURIComponent(seat||'')).then(r=>r.json()).catch(()=>({}));
-  document.getElementById('status').textContent = st.status || 'unknown';
-}
-document.getElementById('spin').onclick = async () => {
-  if (!seat) { document.getElementById('msg').textContent = 'No session — open from the casino lobby'; return; }
-  document.getElementById('msg').textContent = 'Spinning...';
-  const r = await fetch('/api/spin', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({seat, betCents:20}) });
-  const d = await r.json();
-  if (d.line) {
-    d.line.forEach((sym,i) => { document.getElementById('r'+i).textContent = sym; });
-    document.getElementById('msg').textContent = d.win ? 'WIN ' + d.win.key + '  +' + d.winCents + '¢' : 'No win';
-  } else {
-    document.getElementById('msg').textContent = d.error || 'error';
-  }
-};
-init();
-</script>
-</body>
-</html>`);
 });
 
 const port = Number(process.env.PORT || 8080);
