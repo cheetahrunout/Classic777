@@ -2,15 +2,21 @@
 
 Classic three-reel one-line slot for [Grove Casino](https://casino.grovestreet.zip).
 
-Follows the casino integration contract (see `https://casino.grovestreet.zip/game-integration.md`).
-The server decides every outcome with the casino SDK's CSPRNG; the browser only displays results and sends intentions.
+The server decides every outcome with the casino SDK's CSPRNG (`rng`). The browser only displays results and sends spin intentions. Money moves only through the casino API.
 
-## Status
+## Current branch: `grove-integration`
 
-Integration scaffold on the `grove-integration` branch. Next: full Vue + PixiJS frontend, complete round lifecycle, and conformance.
+- `casino-game.json` manifest
+- Casino SDK copy
+- Server with session open, spin (openRound + settle), health, heartbeat
+- Page that loads the casino bar (`/bar.js`)
+- Dockerfile + CI workflow that publishes versioned GHCR images
 
-## Local
+## Next
 
-```sh
-# (coming)
-```
+- Port the original visual reels (handle, SVG symbols, Web Audio) to the server-driven page or a Vue + PixiJS frontend
+- Proper bet ladder, limits from control, demo mode
+- Real pnpm-lock.yaml and Playwright smoke tests
+- RTP verification against the paytable
+
+Open from the casino lobby with `?gc_token=` to play.

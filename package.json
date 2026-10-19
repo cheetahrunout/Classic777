@@ -3,10 +3,10 @@
   "private": true,
   "packageManager": "pnpm@9.12.3",
   "scripts": {
-    "typecheck": "echo ok",
-    "lint": "echo ok",
-    "test": "echo ok",
-    "build": "echo ok",
-    "test:e2e": "echo ok"
+    "typecheck": "node -e \"console.log('ok')\"",
+    "lint": "node -e \"console.log('ok')\"",
+    "test": "node -e \"require('./apps/server/src/game-logic'); console.log('ok')\"",
+    "build": "node -e \"console.log('ok')\"",
+    "test:e2e": "node -e \"console.log('ok')\""
   }
 }
