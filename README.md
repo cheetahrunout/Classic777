@@ -1,20 +1,43 @@
 # Classic 777
 
-Classic three-reel slot for [Grove Casino](https://casino.grovestreet.zip).
+A three-reel, one-line slot for [Grove Casino](https://casino.grovestreet.zip), with the draggable side handle,
+synthesized ratchet, clunk, spring and reel sounds, and the coin-column pay table of the original machine.
 
-Compliant with the casino integration contract (revision 0.24.2):
+Built to the casino's integration contract and build standard, revision 0.24.2
+(https://casino.grovestreet.zip/game-integration.md). Read the current copy before every release (rule 15).
 
-- Server owns all outcomes via the casino SDK CSPRNG (`rng`). Browser only sends intentions and renders results.
-- Session handoff (`?gc_token=` → seat), openRound/settle (or void) on every spin.
-- Heartbeat lists every held session; idle seats closed after 60 s.
-- Vue 3 + PixiJS frontend that loads the casino bar and honours `--grove-bar-*` CSS variables.
-- Manifest, build-cost.jsonl, multi-stage Dockerfile, versioned GHCR CI.
-- Unit tests for the paytable evaluator.
+## How it is put together
 
-## RTP
+| Part | What it does |
+| --- | --- |
+| `apps/server` | Fastify. Takes the handoff, keeps the casino sessions, opens and settles a round per pull, picks the stops with the SDK's `rng`, heartbeats, serves the page. |
+| `apps/server/src/casino` | The casino SDK, `casino-game.js` as shipped. `casino-game.d.ts` was written against it because the casino's own copy could not be fetched; replace it with the casino's. |
+| `apps/web` | Vue 3 + Pinia for the cabinet, meters and buttons; `machine/` animates the reels and the handle; PixiJS drops the coins in the tray. The page draws state and sends intentions, nothing more. |
+| `packages/shared` | Reel strips, pay table, money formatting and the page/server contract (Zod schemas under `@classic777/shared/schemas`, server only). |
+| `e2e/stub-casino.mjs` | An in-memory stand-in for the casino's game API, used by the integration and browser tests. |
 
-Target `rtp_bps` 9600. Paytable is the original credit table scaled to euro cents. Run a large simulation against the server logic before live to confirm.
+## Money and odds
 
-## Play
+- Currency `euro`. A bet is 1 to 3 coins; the coin value is the admin's `coin_cents` setting (5, 10, 20, 50 or 100 cents, default 10).
+  The page offers only the bets that fit the casino's limits, including the 1,500-coin jackpot under the maximum win.
+- The pay table is the original one with "any bar" raised from 10/20/30 to 12/24/33 coins.
+  Exact RTP, by enumerating every stop combination: 96.12% at 1 and 2 coins, 96.31% at 3 coins. Declared `rtp_bps`: 9620.
+- `pnpm rtp` runs the 100,000-pull simulation of section 12. The jackpot makes a single run spread by about ±1.7 points (one sigma) around the exact figure.
 
-Open from the casino lobby. The page at `/` is the Vue+Pixi build (or the fallback public page).
+## Develop
+
+```sh
+pnpm install
+pnpm run typecheck && pnpm run lint && pnpm run test
+pnpm run build
+pnpm run test:e2e        # built app + stub casino in Chromium
+```
+
+Locally against the stub: `node e2e/stub-casino.mjs 9911`, then
+`CASINO_URL=http://127.0.0.1:9911 GAME_KEY=stub-key pnpm start`, take a token with
+`curl -XPOST localhost:9911/test/token -d '{}'` and open `http://localhost:8080/?gc_token=<token>`.
+
+## Run
+
+Environment: `PORT`, `CASINO_URL`, `CASINO_PUBLIC_URL`, `GAME_KEY` (section 11). `GET /health` answers
+`{ ok, version, status }`; the image sets `GAME_VERSION` from the build number.

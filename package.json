@@ -2,19 +2,24 @@
   "name": "classic777",
   "private": true,
   "version": "1.0.0",
+  "type": "module",
   "packageManager": "pnpm@9.12.3",
-  "engines": { "node": ">=24" },
+  "engines": { "node": ">=22.12" },
   "scripts": {
-    "typecheck": "tsc --noEmit --allowJs --checkJs --strictNullChecks false apps/server/src/server.js apps/server/src/game-logic.js || true",
-    "lint": "eslint apps/server/src apps/web/src --ext .js,.vue --max-warnings 999 || true",
-    "test": "node --test apps/server/src/game-logic.test.js",
-    "build": "pnpm --filter @classic777/web run build",
-    "test:e2e": "npx playwright test e2e/smoke.spec.js --reporter=line || echo e2e-skipped",
-    "rtp": "node apps/server/src/rtp-sim.js"
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "build": "pnpm --filter @classic777/web --filter @classic777/server run build",
+    "start": "node apps/server/dist/server.cjs",
+    "test:e2e": "playwright test",
+    "rtp": "node --experimental-strip-types --no-warnings apps/server/src/rtp-sim.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.48.2",
     "eslint": "9.15.0",
-    "typescript": "5.6.3"
+    "eslint-plugin-vue": "9.33.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.0",
+    "vitest": "3.2.4"
   }
 }

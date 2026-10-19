@@ -1,0 +1,13 @@
+{
+  "name": "@classic777/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./schemas": "./src/schemas.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  }
+}
