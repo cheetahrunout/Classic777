@@ -1,5 +1,7 @@
 'use strict';
-// Classic 777 game rules. Server owns outcomes. Uses casino SDK rng for stops.
+// Classic 777 rules. Server owns outcomes. Uses only casino SDK rng.
+// RTP note: original credit pays scaled to euro cents. Target 9600 bps.
+// Verify with a large simulation before live.
 const SYM = { SEVEN: 'SEVEN', BAR3: 'BAR3', BAR2: 'BAR2', BAR1: 'BAR1', BELL: 'BELL', CHERRY: 'CHERRY', BLANK: 'BLANK' };
 const BARS = [SYM.BAR1, SYM.BAR2, SYM.BAR3];
 

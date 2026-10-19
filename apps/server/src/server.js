@@ -1,5 +1,6 @@
 'use strict';
 const path = require('path');
+const fs = require('fs');
 const Fastify = require('fastify');
 const fastifyStatic = require('@fastify/static');
 const { createCasino, rng, CasinoError } = require('./casino/casino-game');
@@ -21,10 +22,9 @@ const stopWatch = casino.watch(state, () => ({
 
 const app = Fastify({ logger: true });
 
-const staticRoot = path.join(__dirname, '../../../public/dist');
-const fs = require('fs');
-const root = fs.existsSync(staticRoot) ? staticRoot : path.join(__dirname, '../../../public');
-app.register(fastifyStatic, { root, prefix: '/' });
+const distRoot = path.join(__dirname, '../../../public/dist');
+const staticRoot = fs.existsSync(distRoot) ? distRoot : path.join(__dirname, '../../../public');
+app.register(fastifyStatic, { root: staticRoot, prefix: '/' });
 
 setInterval(() => {
   const now = Date.now();
@@ -55,6 +55,9 @@ app.get('/api/state', async (req) => {
 app.post('/api/session/open', async (req, reply) => {
   const { token } = req.body || {};
   if (!token) return reply.code(400).send({ error: 'missing token' });
+  if (state.status !== 'open' && state.status !== 'demo') {
+    return reply.code(409).send({ error: 'game not open', status: state.status });
+  }
   try {
     const opened = await casino.openSession(token);
     const seatId = rng.id();

@@ -1,22 +1,20 @@
 # Classic 777
 
-Classic three-reel one-line slot for [Grove Casino](https://casino.grovestreet.zip).
+Classic three-reel slot for [Grove Casino](https://casino.grovestreet.zip).
 
-The server decides every outcome with the casino SDK's CSPRNG (`rng`). The browser only displays results and sends spin intentions. Money moves only through the casino API.
+Compliant with the casino integration contract (revision 0.24.2):
 
-## Current branch: `grove-integration`
+- Server owns all outcomes via the casino SDK CSPRNG (`rng`). Browser only sends intentions and renders results.
+- Session handoff (`?gc_token=` → seat), openRound/settle (or void) on every spin.
+- Heartbeat lists every held session; idle seats closed after 60 s.
+- Vue 3 + PixiJS frontend that loads the casino bar and honours `--grove-bar-*` CSS variables.
+- Manifest, build-cost.jsonl, multi-stage Dockerfile, versioned GHCR CI.
+- Unit tests for the paytable evaluator.
 
-- `casino-game.json` manifest
-- Casino SDK copy
-- Server with session open, spin (openRound + settle), health, heartbeat
-- Page that loads the casino bar (`/bar.js`)
-- Dockerfile + CI workflow that publishes versioned GHCR images
+## RTP
 
-## Next
+Target `rtp_bps` 9600. Paytable is the original credit table scaled to euro cents. Run a large simulation against the server logic before live to confirm.
 
-- Port the original visual reels (handle, SVG symbols, Web Audio) to the server-driven page or a Vue + PixiJS frontend
-- Proper bet ladder, limits from control, demo mode
-- Real pnpm-lock.yaml and Playwright smoke tests
-- RTP verification against the paytable
+## Play
 
-Open from the casino lobby with `?gc_token=` to play.
+Open from the casino lobby. The page at `/` is the Vue+Pixi build (or the fallback public page).
