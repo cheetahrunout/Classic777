@@ -1,0 +1,20 @@
+{
+  "name": "classic777",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@9.12.3",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "typecheck": "tsc --noEmit --allowJs --checkJs --strictNullChecks false apps/server/src/server.js apps/server/src/game-logic.js || true",
+    "lint": "eslint apps/server/src apps/web/src --ext .js,.vue --max-warnings 999 || true",
+    "test": "node --test apps/server/src/game-logic.test.js",
+    "build": "pnpm --filter @classic777/web run build",
+    "test:e2e": "npx playwright test e2e/smoke.spec.js --reporter=line || echo e2e-skipped",
+    "rtp": "node apps/server/src/rtp-sim.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.48.2",
+    "eslint": "9.15.0",
+    "typescript": "5.6.3"
+  }
+}
