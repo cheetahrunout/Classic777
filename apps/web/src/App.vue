@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Vue owns the HUD (meters, ticker, buttons, pay table); machine.ts animates the reels and the handle;
 // tray.ts (PixiJS) drops the coins. The server decides every spin.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { PAYTABLE, formatEuro, statusMessage, tokensValueCents, type Coins, type SeatAnswer, type SpinAnswer, type View } from '@classic777/shared';
 import { ApiError, getSeat, listen, openSeat, rememberSeat, spin, storedSeat, toLobby } from './api.ts';
@@ -9,6 +9,7 @@ import { useGame } from './store.ts';
 import { svgFor } from './machine/art.ts';
 import { bulbPositions, createMachine, type Machine } from './machine/machine.ts';
 import { createTray, type Tray } from './machine/tray.ts';
+import { createCoaster, type Coaster } from './machine/coaster.ts';
 import { Sound } from './machine/sound.ts';
 
 const game = useGame();
@@ -20,6 +21,8 @@ const reelsEl = ref<HTMLElement>();
 const bezelEl = ref<HTMLElement>();
 const leverEl = ref<SVGSVGElement>();
 const trayEl = ref<HTMLElement>();
+const spinEl = ref<HTMLButtonElement>();
+const coasterEl = ref<HTMLElement>();
 
 const bulbs = bulbPositions();
 const payRows = PAYTABLE.map(p => ({ ...p, iconsHtml: p.icons.map(svgFor).join('') }));
@@ -28,6 +31,8 @@ const shownWin = ref(0);
 
 let machine: Machine | null = null;
 let tray: Tray | null = null;
+let coaster: Coaster | null = null;
+let machineResize: ResizeObserver | null = null;
 let stopStream: (() => void) | null = null;
 
 const IDLE = 'PULL THE HANDLE';
@@ -168,6 +173,7 @@ async function onLatch() {
     busy.value = false;
     game.releasePlayer();
     if (e instanceof ApiError && e.body.lobby) return leaveSeat();
+    stopAutoplay();
     game.setMessage(e instanceof ApiError ? spinRefusal(e) : 'NO ANSWER · PULL AGAIN', true);
     return;
   }
@@ -233,6 +239,46 @@ function countUp(cents: number, coinsWon: number, lvl: number, done: () => void)
   }, lvl === 3 ? 900 : 350);
 }
 
+/* ---------------- Autoplay: the coaster holds SPIN down ---------------- */
+
+const autoplay = ref(false);
+let autoTimer = 0;
+
+function scheduleAuto(ms: number) {
+  clearTimeout(autoTimer);
+  autoTimer = window.setTimeout(autoTick, ms);
+}
+
+function autoTick() {
+  if (!autoplay.value || busy.value) return; // the end of the spin schedules the next one
+  if (!playing.value) {
+    // Closed or in maintenance: keep the button held and try again when it opens.
+    game.setMessage(statusShort.value, true);
+    return scheduleAuto(2000);
+  }
+  if (!canPull()) return stopAutoplay();
+  machine?.pull();
+  // If the handle was still settling the pull was ignored: try again.
+  scheduleAuto(1500);
+}
+
+function startAutoplay() {
+  autoplay.value = true;
+  if (!busy.value) game.setMessage('AUTOPLAY');
+  scheduleAuto(250);
+}
+
+/** The coaster came off, or has to come off: stop after the spin in progress. */
+function stopAutoplay() {
+  if (!autoplay.value) return;
+  autoplay.value = false;
+  clearTimeout(autoTimer);
+  if (coaster?.engaged) coaster.release();
+}
+
+// A short breather between spins, so every result is seen.
+watch(busy, b => { if (!b && autoplay.value) scheduleAuto(900); });
+
 /* ---------------- Buttons and keys ---------------- */
 
 function pull() {
@@ -276,6 +322,18 @@ onMounted(() => {
     { canPull, onLatch: () => void onLatch(), hint: text => game.setMessage(text) },
   );
   void createTray(trayEl.value!).then(t => { tray = t; });
+  coaster = createCoaster(coasterEl.value!, machineEl.value!, spinEl.value!, {
+    onEngage: startAutoplay,
+    onRelease: () => {
+      const was = autoplay.value;
+      autoplay.value = false;
+      clearTimeout(autoTimer);
+      if (was && !busy.value) game.setMessage(playing.value ? IDLE : statusShort.value, !playing.value);
+    },
+    hint: text => { if (!busy.value) game.setMessage(text); },
+  });
+  machineResize = new ResizeObserver(() => coaster?.layout());
+  machineResize.observe(machineEl.value!);
   document.addEventListener('keydown', onKey);
   document.addEventListener('visibilitychange', refresh);
   game.setMessage('CONNECTING');
@@ -284,6 +342,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopStream?.();
+  clearTimeout(autoTimer);
+  machineResize?.disconnect();
   machine?.destroy();
   tray?.destroy();
   document.removeEventListener('keydown', onKey);
@@ -359,7 +419,11 @@ onBeforeUnmount(() => {
           </button>
           <button class="btn btn-amber" type="button" :disabled="busy || !playing" @click="betOne">Bet<br>One</button>
           <button class="btn btn-amber" type="button" :disabled="busy || !playing" @click="maxBet">Max<br>Bet</button>
-          <button class="btn btn-spin" type="button" :disabled="busy || !playing" @click="pull">Spin</button>
+          <button
+            ref="spinEl" class="btn btn-spin" :class="{ held: autoplay }" type="button"
+            :disabled="busy || !playing" @click="pull">
+            Spin
+          </button>
         </div>
 
         <div class="plate">Model 777-C · Coin {{ formatEuro(coinCents) }} · Pays on the center line · Space to spin</div>
@@ -387,6 +451,11 @@ onBeforeUnmount(() => {
         </g>
         <circle id="lever-grab" fill="transparent" />
       </svg>
+
+      <div
+        ref="coasterEl" class="coaster" role="button" tabindex="0" aria-pressed="false"
+        aria-label="Paper coaster. Put it on SPIN to keep the machine spinning; take it off to stop."
+        title="Drag onto SPIN for autoplay"></div>
     </div>
   </main>
 </template>

@@ -71,3 +71,37 @@ test('a visitor without a seat is sent to the casino for one', async ({ page }) 
   await page.goto('/');
   await page.waitForURL(/\/play\/classic777$/);
 });
+
+test('the coaster on SPIN keeps the machine spinning until it is taken off', async ({ page }) => {
+  await land(page, 'coaster');
+  const coaster = page.locator('.coaster');
+  const spin = page.locator('.btn-spin');
+  const drag = async (to) => {
+    const c = await coaster.boundingBox();
+    await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) {
+      await page.mouse.move(c.x + c.width / 2 + ((to.x - c.x - c.width / 2) * i) / 10, c.y + c.height / 2 + ((to.y - c.y - c.height / 2) * i) / 10);
+    }
+    await page.mouse.up();
+  };
+  const s = await spin.boundingBox();
+  await drag({ x: s.x + s.width / 2, y: s.y + s.height / 2 });
+  await expect(coaster).toHaveAttribute('aria-pressed', 'true');
+  await expect(spin).toHaveClass(/held/);
+
+  // Two spins in a row with nobody touching the machine.
+  const balance = page.locator('[data-test=balance]');
+  await expect(spin).toBeDisabled();
+  await expect(spin).toBeEnabled({ timeout: 15_000 });
+  await expect(spin).toBeDisabled({ timeout: 5_000 });
+  await expect(balance).not.toHaveText('');
+
+  // Off the button: the spin in progress finishes and no new one starts.
+  await drag({ x: s.x + s.width + 120, y: s.y - 200 });
+  await expect(coaster).toHaveAttribute('aria-pressed', 'false');
+  await expect(spin).not.toHaveClass(/held/);
+  await expect(spin).toBeEnabled({ timeout: 15_000 });
+  await page.waitForTimeout(2500);
+  await expect(spin).toBeEnabled();
+});

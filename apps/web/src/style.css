@@ -485,7 +485,42 @@ body {
 #lever-grab { cursor: grab; }
 .lever.dragging #lever-grab { cursor: grabbing; }
 
+/* ---------- Paper coaster (autoplay) ---------- */
+.coaster {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 116px;
+  height: 116px;
+  z-index: 6;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 50%;
+  outline: none;
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .45)) drop-shadow(0 8px 14px rgba(0, 0, 0, .35));
+  transition: filter .15s;
+}
+.coaster svg { display: block; }
+.coaster.settling { transition: transform .32s cubic-bezier(.3, 1.3, .5, 1), filter .15s; }
+.coaster.lifted {
+  cursor: grabbing;
+  filter: drop-shadow(0 10px 6px rgba(0, 0, 0, .35)) drop-shadow(0 22px 26px rgba(0, 0, 0, .4));
+}
+.coaster.on-spin { filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .55)) drop-shadow(0 4px 8px rgba(0, 0, 0, .35)); }
+.coaster:focus-visible { box-shadow: 0 0 0 3px var(--m-gold-pale); }
+
+/* SPIN held down under the coaster */
+.btn-spin.held,
+.btn-spin.held:disabled {
+  transform: translateY(4px);
+  filter: none;
+  box-shadow: 0 1px 0 #4d0308, 0 0 26px rgba(255, 80, 60, .95), inset 0 2px 6px rgba(0, 0, 0, .35);
+  animation: none;
+}
+.btn-spin.coaster-target { box-shadow: 0 5px 0 #4d0308, 0 0 0 3px var(--m-gold-pale), 0 0 30px rgba(255, 220, 120, .9); }
+
 @media (prefers-reduced-motion: reduce) {
   .bulb, .btn-spin { animation: none !important; }
+  .coaster.settling { transition: none; }
   .machine.winning .bulb, .machine.jackpot .bulb { animation: none !important; background: var(--m-bulb-on); }
 }

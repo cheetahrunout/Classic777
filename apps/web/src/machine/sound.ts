@@ -114,6 +114,21 @@ export const Sound = {
     const c = ready(); if (!c) return;
     burst(c, c.currentTime, 0.014, 'highpass', 2200, 0.8, 0.09 * vol);
   },
+  /** Cardboard lifted off a surface. */
+  paperLift() {
+    const c = ready(); if (!c) return;
+    const t = c.currentTime;
+    burst(c, t, 0.12, 'bandpass', 1800, 0.7, 0.18);
+    burst(c, t + 0.03, 0.08, 'highpass', 4500, 0.5, 0.06);
+  },
+  /** The coaster lands on the SPIN button and holds it down. */
+  coasterDown() {
+    const c = ready(); if (!c) return;
+    const t = c.currentTime;
+    burst(c, t, 0.07, 'lowpass', 700, 0.8, 0.5);
+    burst(c, t, 0.04, 'bandpass', 2400, 1.5, 0.14);
+    tone(c, t + 0.05, 'square', 1700, 1100, 0.018, 0.06);
+  },
   reelStop() {
     const c = ready(); if (!c) return;
     const t = c.currentTime;
