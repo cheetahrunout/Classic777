@@ -47,6 +47,10 @@ jobs:
         run: pnpm run test
       - name: Production build
         run: pnpm run build
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium || true
+      - name: e2e smoke
+        run: pnpm run test:e2e
 
   build_docker:
     needs: [generate_version_number, verify]
