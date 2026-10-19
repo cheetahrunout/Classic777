@@ -21,10 +21,10 @@ const stopWatch = casino.watch(state, () => ({
 
 const app = Fastify({ logger: true });
 
-app.register(fastifyStatic, {
-  root: path.join(__dirname, '../../../public'),
-  prefix: '/',
-});
+const staticRoot = path.join(__dirname, '../../../public/dist');
+const fs = require('fs');
+const root = fs.existsSync(staticRoot) ? staticRoot : path.join(__dirname, '../../../public');
+app.register(fastifyStatic, { root, prefix: '/' });
 
 setInterval(() => {
   const now = Date.now();
@@ -58,11 +58,7 @@ app.post('/api/session/open', async (req, reply) => {
   try {
     const opened = await casino.openSession(token);
     const seatId = rng.id();
-    seats.set(seatId, {
-      casinoSession: opened.session,
-      lastSeen: Date.now(),
-      player: opened.player,
-    });
+    seats.set(seatId, { casinoSession: opened.session, lastSeen: Date.now(), player: opened.player });
     return { seat: seatId, player: opened.player, sessions: opened.sessions };
   } catch (e) {
     if (e instanceof CasinoError) return reply.code(e.status).send({ error: e.message, data: e.data });
@@ -108,14 +104,7 @@ app.post('/api/spin', async (req, reply) => {
     throw e;
   }
 
-  return {
-    round: roundId,
-    line: result.line,
-    stops: result.stops,
-    win: result.result,
-    winCents,
-    credits,
-  };
+  return { round: roundId, line: result.line, stops: result.stops, win: result.result, winCents, credits };
 });
 
 app.post('/api/session/close', async (req) => {

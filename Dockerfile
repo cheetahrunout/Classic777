@@ -1,11 +1,19 @@
+FROM node:24-alpine AS build
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/server/package.json apps/server/
+COPY apps/web/package.json apps/web/
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm run build || true
+
 FROM node:24-alpine
 WORKDIR /app
-ENV NODE_ENV=production \
-    PORT=8080
-COPY package.json ./
-COPY apps/server/package.json apps/server/
-COPY apps/server/src apps/server/src
-COPY public public
+ENV NODE_ENV=production PORT=8080
+COPY --from=build /app/apps/server/src ./apps/server/src
+COPY --from=build /app/apps/server/package.json ./apps/server/
+COPY --from=build /app/public ./public
 COPY casino-game.json ./
 WORKDIR /app/apps/server
 RUN npm install --omit=dev
