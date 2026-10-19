@@ -1,0 +1,17 @@
+{
+  "slug": "classic777",
+  "name": "Classic 777",
+  "version": "1.0.0",
+  "url": "https://classic777.casino.grovestreet.zip",
+  "repository": "https://github.com/cheetahrunout/Classic777",
+  "blurb": "Classic three-reel one-line slot. Pull the handle or hit spin for cherries, bars, bells and the 777 jackpot.",
+  "icon": "7\u20e3",
+  "rtp_bps": 9600,
+  "min_bet_cents": 20,
+  "max_bet_cents": 300,
+  "max_win_cents": 450000,
+  "multiplayer": false,
+  "currency": "euro",
+  "round_name": "spins",
+  "health_url": "/health"
+}
