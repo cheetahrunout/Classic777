@@ -16,6 +16,7 @@ concurrency:
 jobs:
   generate_version_number:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     outputs:
@@ -29,7 +30,11 @@ jobs:
 
   verify:
     needs: generate_version_number
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19, which the pinned
+    # Playwright (1.48) can't install browser dependencies on.
+    runs-on: ubuntu-24.04
+    # Fail fast instead of blocking the shared queue for hours if a step hangs.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -48,13 +53,16 @@ jobs:
       - name: Production build
         run: pnpm run build
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium || true
+        timeout-minutes: 8
+        run: pnpm exec playwright install --with-deps chromium
       - name: e2e smoke
+        timeout-minutes: 8
         run: pnpm run test:e2e
 
   build_docker:
     needs: [generate_version_number, verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -88,6 +96,7 @@ jobs:
     needs: [generate_version_number, build_docker]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
