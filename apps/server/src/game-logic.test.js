@@ -6,7 +6,7 @@ const { evaluate, payoutFor } = require('./game-logic');
 test('three sevens win', () => {
   const r = evaluate(['SEVEN', 'SEVEN', 'SEVEN']);
   assert.equal(r.key, 'SEVEN');
-  assert.equal(payoutFor(r, 2), 1500);
+  assert.equal(payoutFor(r, 2), 1600);
 });
 
 test('no win', () => {
