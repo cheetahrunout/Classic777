@@ -9,6 +9,10 @@
     "lint": "echo lint-ok",
     "test": "node --test apps/server/src/game-logic.test.js",
     "build": "pnpm --filter @classic777/web run build",
-    "test:e2e": "echo e2e-ok"
+    "test:e2e": "echo e2e-skipped-until-playwright-installed",
+    "rtp": "node apps/server/src/rtp-sim.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.48.2"
   }
 }
