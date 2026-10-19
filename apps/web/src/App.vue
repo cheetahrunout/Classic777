@@ -454,7 +454,7 @@ onBeforeUnmount(() => {
 
       <div
         ref="coasterEl" class="coaster" role="button" tabindex="0" aria-pressed="false"
-        aria-label="Paper coaster. Put it on SPIN to keep the machine spinning; take it off to stop."
+        aria-label="Beer coaster. Stand it behind SPIN to keep the machine spinning; take it out to stop."
         title="Drag onto SPIN for autoplay"></div>
     </div>
   </main>

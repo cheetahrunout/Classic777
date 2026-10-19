@@ -1,79 +1,97 @@
-// The paper coaster beside the cabinet. Rest it on SPIN and the button stays held down (autoplay);
-// drag it off to stop. Pure UI: what a pull does is up to the hooks.
-import { jitter } from './jitter.ts';
+// The beer coaster beside the cabinet. It lies flat on the counter; dropped on SPIN it flips up onto
+// its edge, wedged between the button and the cabinet, and holds the button down (autoplay).
+// Drag it out again to stop. Pure UI: what a pull does is up to the hooks.
 import { Sound } from './sound.ts';
 
 export interface CoasterHooks {
-  /** The coaster now rests on SPIN. */
+  /** The coaster now holds SPIN down. */
   onEngage(): void;
   /** The coaster came off SPIN. */
   onRelease(): void;
   hint(text: string): void;
 }
 
+/** The name on the banner: the house beer of the lounge the machine stands in. */
+export const COASTER_NAME = 'Grove';
+
 const SIZE = 116;
 const R = SIZE / 2;
 const DRAG_SLOP = 6;   // px of movement before a press counts as a drag
 
-// A pulpboard edge is never a clean circle: a fixed wobble, the same on every load.
-function deckledEdge(): string {
+/** How the coaster sits: its bottom edge's centre (machine px), tilt back, turn, size. */
+interface Pose { bx: number; by: number; tilt: number; turn: number; scale: number }
+
+// Die-cut pulpboard is never a perfect circle: a fixed, faint wobble.
+function edge(): string {
   const pts: string[] = [];
   const n = 120;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
-    const r = 56.2 + 0.55 * Math.sin(i * 7.3) + 0.35 * Math.sin(i * 17.9 + 1.3) + 0.25 * Math.cos(i * 31.1);
+    const r = 56.4 + 0.35 * Math.sin(i * 7.3) + 0.25 * Math.sin(i * 17.9 + 1.3) + 0.15 * Math.cos(i * 31.1);
     pts.push(`${(Math.cos(a) * r).toFixed(2)},${(Math.sin(a) * r).toFixed(2)}`);
   }
   return `M${pts.join('L')}Z`;
 }
 
+function star(cx: number, cy: number, r: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rr = i % 2 ? r * 0.4 : r;
+    pts.push(`${(cx + Math.cos(a) * rr).toFixed(2)},${(cy + Math.sin(a) * rr).toFixed(2)}`);
+  }
+  return pts.join(' ');
+}
+
 export function coasterSvg(): string {
+  // The red caps: lenses cut from a circle inside the rim, leaving a cream band for the ribbon.
+  const cap = (s: 1 | -1) => `M-40.4,${-19.5 * s} A45,45 0 0,${s > 0 ? 1 : 0} 40.4,${-19.5 * s} Q0,${-8.5 * s} -40.4,${-19.5 * s}Z`;
   return `
 <svg viewBox="-60 -60 120 120" width="${SIZE}" height="${SIZE}" aria-hidden="true">
   <defs>
-    <radialGradient id="cst-pulp" cx=".42" cy=".38" r=".7">
-      <stop offset="0" stop-color="#fbf4e3"/>
-      <stop offset=".7" stop-color="#efe3c8"/>
-      <stop offset="1" stop-color="#dccaa4"/>
+    <radialGradient id="cst-pulp" cx=".45" cy=".4" r=".72">
+      <stop offset="0" stop-color="#fbf8ef"/>
+      <stop offset=".75" stop-color="#f1ebdb"/>
+      <stop offset="1" stop-color="#e2d8c0"/>
     </radialGradient>
     <filter id="cst-grain" x="-5%" y="-5%" width="110%" height="110%">
-      <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/>
-      <feColorMatrix in="n" type="matrix" values="0 0 0 0 .45  0 0 0 0 .36  0 0 0 0 .22  0 0 0 .55 -.12"/>
+      <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2" seed="11" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 .42  0 0 0 0 .36  0 0 0 0 .26  0 0 0 .32 -.1"/>
       <feComposite in2="SourceGraphic" operator="in"/>
     </filter>
-    <filter id="cst-stain" x="-20%" y="-20%" width="140%" height="140%">
-      <feTurbulence type="fractalNoise" baseFrequency=".08" numOctaves="2" seed="3"/>
-      <feDisplacementMap in="SourceGraphic" scale="3.2"/>
+    <filter id="cst-ink" x="-5%" y="-5%" width="110%" height="110%">
+      <!-- Letterpress ink on pulp: edges that wander a hair. -->
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="1" seed="4"/>
+      <feDisplacementMap in="SourceGraphic" scale=".7"/>
     </filter>
-    <path id="cst-ring" d="M0,-38.5 a38.5,38.5 0 1,1 -0.01,0"/>
-    <clipPath id="cst-clip"><path d="${deckledEdge()}"/></clipPath>
+    <clipPath id="cst-clip"><path d="${edge()}"/></clipPath>
   </defs>
   <g clip-path="url(#cst-clip)">
     <rect x="-60" y="-60" width="120" height="120" fill="url(#cst-pulp)"/>
-    <!-- print -->
-    <circle r="50.5" fill="none" stroke="#b3121c" stroke-width="6.5"/>
-    <circle r="50.5" fill="none" stroke="#e9b83a" stroke-width="1" stroke-dasharray="1.6 2.4"/>
-    <circle r="45.2" fill="none" stroke="#b3121c" stroke-width=".8"/>
-    <circle r="31.5" fill="none" stroke="#b3121c" stroke-width=".8"/>
-    <text font-family="'Barlow Condensed', 'Arial Narrow', sans-serif" font-weight="700" font-size="8.6"
-          letter-spacing=".6" fill="#8c0f17" textLength="236" lengthAdjust="spacing">
-      <textPath href="#cst-ring">REST ON SPIN FOR AUTOPLAY ★ CLASSIC 777 LOUNGE ★</textPath>
-    </text>
-    <text y="9" text-anchor="middle" font-family="'Alfa Slab One', Georgia, serif" font-size="25"
-          fill="#c8141f" stroke="#e9b83a" stroke-width="1.1" paint-order="stroke">777</text>
-    <text y="19" text-anchor="middle" font-family="'Barlow Condensed', 'Arial Narrow', sans-serif" font-weight="700"
-          font-size="5.6" letter-spacing="1.4" fill="#8c0f17">LOUNGE</text>
-    <text y="-13" text-anchor="middle" font-size="6" fill="#e9b83a">★ ★ ★</text>
-    <!-- a glass stood here once -->
-    <g filter="url(#cst-stain)" fill="none" stroke-linecap="round">
-      <circle cx="9" cy="-7" r="27" stroke="#7a4b18" stroke-opacity=".16" stroke-width="2.4" stroke-dasharray="120 18 30 9"/>
-      <circle cx="9" cy="-7" r="25.6" stroke="#7a4b18" stroke-opacity=".07" stroke-width="3.5"/>
+    <g filter="url(#cst-ink)">
+      <circle r="49" fill="none" stroke="#151313" stroke-width="2.2"/>
+      <path d="${cap(1)}" fill="#e2231a"/>
+      <path d="${cap(-1)}" fill="#e2231a"/>
+      <polygon points="${star(0, -31.5, 7.6)}" fill="#fbf8ef"/>
+      <!-- the ribbon: tails first, folds, then the band -->
+      <polygon points="-36,-6 -53,-6 -47.5,1.5 -53,9 -36,9" fill="#151313"/>
+      <polygon points="36,-6 53,-6 47.5,1.5 53,9 36,9" fill="#151313"/>
+      <polygon points="-36,9 -31,13 -31,9" fill="#000"/>
+      <polygon points="36,9 31,13 31,9" fill="#000"/>
+      <polyline points="-36,-4 -50,-4 -45.5,1.5 -50,7 -36,7" fill="none" stroke="#fbf8ef" stroke-width=".7"/>
+      <polyline points="36,-4 50,-4 45.5,1.5 50,7 36,7" fill="none" stroke="#fbf8ef" stroke-width=".7"/>
+      <rect x="-37" y="-12.5" width="74" height="22" rx="1.5" fill="#151313"/>
+      <rect x="-34.8" y="-10.3" width="69.6" height="17.6" rx="1" fill="none" stroke="#fbf8ef" stroke-width=".8"/>
+      <text y="4.6" text-anchor="middle" font-family="'Alfa Slab One', 'Rockwell', Georgia, serif" font-size="15"
+            letter-spacing=".4" fill="#fbf8ef">${COASTER_NAME}</text>
+      <text y="36.5" text-anchor="middle" font-family="'Yellowtail', 'Brush Script MT', cursive" font-size="19"
+            fill="#fbf8ef" stroke="#fbf8ef" stroke-width=".35">bier</text>
+      <text y="54.6" text-anchor="middle" font-family="'Barlow Condensed', 'Arial Narrow', sans-serif" font-weight="700"
+            font-size="3.6" letter-spacing=".3" fill="#e2231a">C-7</text>
     </g>
-    <circle cx="-22" cy="26" r="1.6" fill="#7a4b18" fill-opacity=".1"/>
-    <circle cx="-17" cy="31" r="1" fill="#7a4b18" fill-opacity=".08"/>
-    <!-- pulp grain and a worn edge -->
+    <!-- pulp grain and a soft, handled edge -->
     <rect x="-60" y="-60" width="120" height="120" fill="#fff" filter="url(#cst-grain)"/>
-    <circle r="56" fill="none" stroke="#bfa678" stroke-opacity=".55" stroke-width="2.2"/>
+    <circle r="56.4" fill="none" stroke="#cbbd9c" stroke-opacity=".7" stroke-width="1.6"/>
   </g>
 </svg>`;
 }
@@ -82,8 +100,8 @@ export function createCoaster(el: HTMLElement, machine: HTMLElement, spin: HTMLE
   el.innerHTML = coasterSvg();
 
   let engaged = false;
-  let x = 0, y = 0, rot = -11;
-  let drag: { id: number; sx: number; sy: number; ox: number; oy: number; moved: boolean } | null = null;
+  let pose: Pose = { bx: 0, by: 0, tilt: 64, turn: -14, scale: 1 };
+  let drag: { id: number; sx: number; sy: number; o: Pose; moved: boolean } | null = null;
 
   // Offsets within the machine, unaffected by its CSS scale.
   function offsetIn(node: HTMLElement) {
@@ -93,57 +111,79 @@ export function createCoaster(el: HTMLElement, machine: HTMLElement, spin: HTMLE
     return { left, top, width: node.offsetWidth, height: node.offsetHeight };
   }
 
-  /** Beside the cabinet, level with the coin tray. */
-  function home() {
-    return { x: machine.offsetWidth - SIZE - 4, y: machine.offsetHeight - SIZE - 6, rot: -11 };
+  /** Flat on the counter beside the cabinet, seen in perspective. */
+  function home(): Pose {
+    return { bx: machine.offsetWidth - R - 6, by: machine.offsetHeight - 10, tilt: 64, turn: -14, scale: 1 };
   }
 
-  /** Laid over SPIN, a little askew, the way someone would leave it. */
-  function onSpin() {
+  /** Stood on its edge behind SPIN: the button covers its foot and is held down by it. */
+  function standing(): Pose {
     const b = offsetIn(spin);
-    return { x: b.left + b.width / 2 - R + 8, y: b.top + b.height / 2 - R - 2, rot: 7 };
+    return { bx: b.left + b.width / 2 + 24, by: b.top + b.height * 0.62, tilt: 0, turn: -5, scale: 0.86 };
   }
 
-  function overSpin(cx: number, cy: number) {
-    const b = offsetIn(spin);
-    const pad = 22;
-    return cx > b.left - pad && cx < b.left + b.width + pad && cy > b.top - pad && cy < b.top + b.height + pad;
+  const css = (p: Pose) =>
+    `translate(${(p.bx - R).toFixed(1)}px, ${(p.by - SIZE).toFixed(1)}px) perspective(700px) ` +
+    `rotateX(${p.tilt.toFixed(1)}deg) rotateZ(${p.turn.toFixed(1)}deg) scale(${p.scale})`;
+
+  function apply(p: Pose, animate: 'none' | 'settle') {
+    pose = p;
+    el.classList.toggle('settling', animate === 'settle');
+    el.style.transform = css(p);
   }
 
-  function place(p: { x: number; y: number; rot: number }, animate: boolean) {
-    x = p.x; y = p.y; rot = p.rot;
-    el.classList.toggle('settling', animate);
-    el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${rot}deg)`;
+  const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  function setEngaged(on: boolean) {
+    if (engaged === on) return;
+    engaged = on;
+    el.classList.toggle('on-spin', on);
+    el.setAttribute('aria-pressed', String(on));
+    if (on) hooks.onEngage(); else hooks.onRelease();
   }
 
   function engage() {
-    place(onSpin(), true);
-    Sound.coasterDown();
-    if (engaged) return;
-    engaged = true;
-    el.classList.add('on-spin');
-    el.setAttribute('aria-pressed', 'true');
-    hooks.onEngage();
+    const from = css(pose);
+    const to = standing();
+    apply(to, 'none');
+    if (!reducedMotion()) {
+      // Lands flat on the button deck, then flips up onto its edge, rocks back once and settles.
+      el.animate([
+        { transform: from, offset: 0 },
+        { transform: css({ ...to, by: to.by - 24, tilt: 80, turn: to.turn - 8, scale: 0.9 }), offset: 0.3, easing: 'cubic-bezier(.5, 0, .7, .4)' },
+        { transform: css({ ...to, tilt: -10 }), offset: 0.72, easing: 'ease-out' },
+        { transform: css({ ...to, tilt: 3 }), offset: 0.87, easing: 'ease-in-out' },
+        { transform: css(to), offset: 1 },
+      ], { duration: 700 });
+    }
+    Sound.paperLift();
+    window.setTimeout(() => Sound.coasterDown(), reducedMotion() ? 0 : 480);
+    setEngaged(true);
   }
 
   function release(animate = true) {
-    place(home(), animate);
-    if (!engaged) return;
-    engaged = false;
-    el.classList.remove('on-spin');
-    el.setAttribute('aria-pressed', 'false');
-    hooks.onRelease();
+    apply(home(), animate ? 'settle' : 'none');
+    setEngaged(false);
   }
 
   function scale() {
-    const w = machine.getBoundingClientRect().width;
-    return w / machine.offsetWidth || 1;
+    return machine.getBoundingClientRect().width / machine.offsetWidth || 1;
+  }
+
+  /** Is the pointer over SPIN (with a forgiving margin)? */
+  function pointerOverSpin(clientX: number, clientY: number) {
+    const m = machine.getBoundingClientRect();
+    const s = scale();
+    const px = (clientX - m.left) / s, py = (clientY - m.top) / s;
+    const b = offsetIn(spin);
+    const pad = 30;
+    return px > b.left - pad && px < b.left + b.width + pad && py > b.top - pad - 20 && py < b.top + b.height + pad;
   }
 
   el.addEventListener('pointerdown', e => {
     Sound.init();
     e.preventDefault();
-    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: x, oy: y, moved: false };
+    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, o: { ...pose }, moved: false };
     el.setPointerCapture(e.pointerId);
   });
 
@@ -157,19 +197,14 @@ export function createCoaster(el: HTMLElement, machine: HTMLElement, spin: HTMLE
       drag.moved = true;
       el.classList.add('lifted');
       Sound.paperLift();
-      // Lifting it off SPIN lets the button up straight away.
-      if (engaged) {
-        engaged = false;
-        el.classList.remove('on-spin');
-        el.setAttribute('aria-pressed', 'false');
-        hooks.onRelease();
-      }
+      // Pulling it out from behind SPIN lets the button up straight away.
+      setEngaged(false);
     }
-    const nx = Math.min(machine.offsetWidth - SIZE, Math.max(-SIZE / 3, drag.ox + dx));
-    const ny = Math.min(machine.offsetHeight - SIZE / 2, Math.max(0, drag.oy + dy));
-    rot = -11 + (nx - drag.ox) * 0.04 + (jitter() - 0.5) * 0.2;
-    place({ x: nx, y: ny, rot }, false);
-    spin.classList.toggle('coaster-target', overSpin(nx + R, ny + R));
+    const bx = Math.min(machine.offsetWidth - R / 2, Math.max(R / 2, drag.o.bx + dx));
+    const by = Math.min(machine.offsetHeight + 10, Math.max(SIZE, drag.o.by + dy));
+    // In the hand: half tipped towards you, turning a little with the movement.
+    apply({ bx, by, tilt: 30, turn: -8 + Math.max(-10, Math.min(10, dx * 0.05)), scale: 1.04 }, 'none');
+    spin.classList.toggle('coaster-target', pointerOverSpin(e.clientX, e.clientY));
   });
 
   function endDrag(e: PointerEvent) {
@@ -182,14 +217,14 @@ export function createCoaster(el: HTMLElement, machine: HTMLElement, spin: HTMLE
       if (!engaged) hooks.hint('DRAG THE COASTER ONTO SPIN FOR AUTOPLAY');
       return;
     }
-    if (overSpin(x + R, y + R)) engage();
+    if (e.type === 'pointerup' && pointerOverSpin(e.clientX, e.clientY)) engage();
     else release();
   }
   el.addEventListener('pointerup', endDrag);
   el.addEventListener('pointercancel', endDrag);
   el.addEventListener('lostpointercapture', endDrag);
 
-  // Keyboard: Enter or Space puts it on SPIN or takes it off.
+  // Keyboard: Enter or Space stands it on SPIN or takes it off.
   el.addEventListener('keydown', e => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault();
@@ -202,7 +237,7 @@ export function createCoaster(el: HTMLElement, machine: HTMLElement, spin: HTMLE
 
   function layout() {
     if (drag) return;
-    place(engaged ? onSpin() : home(), false);
+    apply(engaged ? standing() : home(), 'none');
   }
 
   layout();
