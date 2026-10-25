@@ -134,7 +134,8 @@ export function buildApp(opts: AppOptions) {
     const active = activeSeats();
     return {
       version: opts.version,
-      players: new Set(active.map(s => s.player.id)).size,
+      // rule 17: only the players with a pull in progress (spinning, or a settle still owed), never idle seats
+      players: new Set(active.filter(s => s.spinning || [...pending.values()].some(p => p.seat === s.id)).map(s => s.player.id)).size,
       sessions: active.map(s => s.session),
     };
   }

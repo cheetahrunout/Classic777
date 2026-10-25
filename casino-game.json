@@ -11,6 +11,14 @@
   "min_bet_cents": 5,
   "max_bet_cents": 300,
   "max_win_cents": 150000,
+  "rtp_sd": 5.61,
+  "features": [],
+  "top_prizes": [
+    { "name": "777 Jackpot at 3 coins (300x at 1 or 2 coins)", "x": 500, "every": 10648 },
+    { "name": "Three triple bars", "x": 100, "every": 10648 },
+    { "name": "Three double bars", "x": 50, "every": 1331 }
+  ],
+  "special_outcomes": [],
   "multiplayer": false,
   "currency": "euro",
   "leaderboard": { "metric": "net", "min_hands": 10 },
