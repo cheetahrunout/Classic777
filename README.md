@@ -3,7 +3,7 @@
 A three-reel, one-line slot for [Grove Casino](https://casino.grovestreet.zip), with the draggable side handle,
 synthesized ratchet, clunk, spring and reel sounds, and the coin-column pay table of the original machine.
 
-Built to the casino's integration contract and build standard, revision 0.24.2
+Built to the casino's integration contract and build standard, revision 0.68.0
 (https://casino.grovestreet.zip/game-integration.md). Read the current copy before every release (rule 15).
 
 ## How it is put together
@@ -25,6 +25,10 @@ Built to the casino's integration contract and build standard, revision 0.24.2
   at € 0,10 a coin the declared limits allow every bet up to 30 coins (€ 3,00, top prize € 1.500,00).
 - The pay table is the original one with "any bar" raised from 10/20/30 to 12/24/33 coins.
   Exact RTP, by enumerating every stop combination: 96.12% at 1 and 2 coins, 96.31% at 3 coins. Declared `rtp_bps`: 9620.
+- Declared in `casino-game.json` (rule 4, section 6), exact by the same enumeration at 3 coins, where the machine spreads
+  widest: `rtp_sd` 5.61 bets (4.10 at 1 and 2 coins), no bonus features, and `top_prizes`: the 777 jackpot at 500 times
+  the bet (300 at 1 or 2 coins) and three triple bars at 100, each once in 10,648 pulls, and three double bars at 50 once
+  in 1,331. No round depends on an earlier one, so no `special_outcomes`.
 - `pnpm rtp` runs the 100,000-pull simulation of section 12. The jackpot makes a single run spread by about ±1.7 points (one sigma) around the exact figure.
 
 ## Develop

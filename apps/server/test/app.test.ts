@@ -242,7 +242,8 @@ describe('heartbeat and seats', () => {
     await seat('bob');
     const extra = game.heartbeatExtra();
     expect(extra.version).toBe('1.0.42');
-    expect(extra.players).toBe(2);
+    // idle seats are no players (rule 17): nobody has a pull in progress
+    expect(extra.players).toBe(0);
     expect(extra.sessions).toHaveLength(3);
     expect(stub.heartbeats.at(-1)).toMatchObject({ version: '1.0.42' });
   });
